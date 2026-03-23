@@ -2,6 +2,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <SoftwareSerial.h>
+#include <TimeLib.h>
 
 // MISC
 const int trigPin = 11;
@@ -49,6 +50,26 @@ void setup() {
   display.setCursor(0, 16);
 }
 
+void clock() {
+
+}
+
+void alarm() {
+
+}
+
+void stopwatch() {
+  
+}
+
+void timer() {
+
+}
+
+void menu() {
+
+}
+
 // MAIN LOOP
 void loop() {
   if (SerialBT.available()){
@@ -67,9 +88,9 @@ void loop() {
     }
   }
 
+  // FOR THE ULTRASONIC SENSOR
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
-
   digitalWrite(trigPin, HIGH);
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
@@ -77,6 +98,7 @@ void loop() {
   timing = pulseIn(echoPin, HIGH);
   distance = (timing * 0.034) / 2;
   
+  // TEMP TO TEST SNOOZE DISTANCE
   display.clearDisplay();
   display.setCursor(0, 16);
   display.print("D:");

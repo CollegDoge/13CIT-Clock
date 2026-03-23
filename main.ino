@@ -48,6 +48,8 @@ void setup() {
   display.setTextSize(3);
   display.setTextColor(WHITE);
   display.setCursor(0, 16);
+
+  setTime(9, 30, 0, 1, 1, 2024); 
 }
 
 void clock() {
@@ -82,7 +84,7 @@ void loop() {
         SerialBT.println("its working yay");
     }
     else {
-        SerialBT.print("Command '");
+        SerialBT.println("Command '");
         SerialBT.print(msg);
         SerialBT.print("'  is unknown");
     }
@@ -98,19 +100,38 @@ void loop() {
   timing = pulseIn(echoPin, HIGH);
   distance = (timing * 0.034) / 2;
   
-  // TEMP TO TEST SNOOZE DISTANCE
-  display.clearDisplay();
-  display.setCursor(0, 16);
-  display.print("D:");
-  display.print(distance);
-  display.print("cm");
-  display.display();
+  // CLOCK FUNC
+  static int lastSecond = -1;
+  if (second() != lastSecond) {
+    lastSecond = second();
+    displayTime();
+  }
 
-  if (distance <= 30) {
-    tone(buzzer, 900);
+  if (distance <= 10) {
+    tone(buzzer, 500);
   } else {
     noTone(buzzer);
   }
   
   delay(100);
+}
+
+void displayTime() {
+  display.clearDisplay();
+  display.setCursor(0, 16);
+  display.setTextSize(3);
+  
+  if (hour() < 10) display.print("0");
+  display.print(hour());
+  display.print(":");
+  
+  if (minute() < 10) display.print("0");
+  display.print(minute());
+  display.setTextSize(2);
+  display.print(" "); 
+
+  if (second() < 10) display.print("0");
+  display.print(second());
+
+  display.display(); 
 }

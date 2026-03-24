@@ -49,7 +49,7 @@ void setup() {
   display.setTextColor(WHITE);
   display.setCursor(0, 16);
 
-  setTime(9, 30, 0, 1, 1, 2024); 
+  setTime(0, 0, 0, 1, 1, 2026); 
 }
 
 void clock() {
@@ -74,19 +74,22 @@ void menu() {
 
 // MAIN LOOP
 void loop() {
+  // TIME SYNC/BLUETOOTH
   if (SerialBT.available()){
     msg = SerialBT.readStringUntil('\n');
     msg.trim();
-    Serial.print("Received: "); // Print to computer for debugging
-    Serial.println(msg);
-
-    if (msg == "test") {
-        SerialBT.println("its working yay");
+    
+    if (msg.startsWith("T")) {
+      String timeString = msg.substring(1); 
+      unsigned long pctime = timeString.toInt();
+      
+      if (pctime > 0) { 
+        setTime(pctime);
+        SerialBT.println("Time Synced!");
+      }
     }
-    else {
-        SerialBT.println("Command '");
-        SerialBT.print(msg);
-        SerialBT.print("'  is unknown");
+    else if (msg == "test") {
+        SerialBT.println("its working yay");
     }
   }
 
@@ -100,19 +103,21 @@ void loop() {
   timing = pulseIn(echoPin, HIGH);
   distance = (timing * 0.034) / 2;
   
-  // CLOCK FUNC
-  static int lastSecond = -1;
-  if (second() != lastSecond) {
-    lastSecond = second();
-    displayTime();
-  }
-
+  // temp ultrasonic snooze test
   if (distance <= 10) {
     tone(buzzer, 500);
   } else {
     noTone(buzzer);
   }
   
+  // CLOCK
+  static int lastSecond = -1;
+  if (second() != lastSecond) {
+    lastSecond = second();
+    displayTime();
+  }
+
+  // temp for ultrasonic  
   delay(100);
 }
 

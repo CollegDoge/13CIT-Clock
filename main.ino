@@ -5,138 +5,128 @@
 #include <TimeLib.h>
 #include "DFRobotDFPlayerMini.h"
 
-// MISC
+// PINS
 const int trigPin = 11;
 const int echoPin = 12;
 
-// DISPLAY
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+const int MP3_RX_PIN = 3;
+const int MP3_TX_PIN = 2;
 
-// MP3
-const uint8_t PIN_MP3_TX = 2;
-const uint8_t PIN_MP3_RX = 3;
+const int BT_RX_PIN = 6;
+const int BT_TX_PIN = 5;
+
+// DISPLAY
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+// SERIAL
+SoftwareSerial SerialBT(BT_RX_PIN, BT_TX_PIN);
+SoftwareSerial SerialMP3(MP3_RX_PIN, MP3_TX_PIN);
 DFRobotDFPlayerMini MP3player;
 
-long duration;
-float timing = 0.0;
-int distance;
-
-// BLUETOOTH
-const int RX  = 6;
-const int TX  = 5;
-SoftwareSerial SerialBT(RX, TX);
-SoftwareSerial SerialMP3(PIN_MP3_RX, PIN_MP3_TX);
-String msg; 
+// LOGIC
+unsigned long prevMillis = 0;
+bool isAlarmPlaying = true;
+bool showSnooze = false;
+unsigned long snoozeTimer = 0;
 
 // SETUP
 void setup() {
   Serial.begin(9600);
   SerialBT.begin(9600);
   SerialMP3.begin(9600);
-  SerialBT.println(F("Bluetooth connection  is established"));
 
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
-  if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for(;;);
-  }
-
-  delay(1000); // idk if i need this much delay
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   display.clearDisplay();
-
-  display.setTextSize(3);
-  display.setTextColor(WHITE);
-  display.setCursor(0, 16);
+  display.display();
 
   setTime(0, 0, 0, 1, 1, 2026);
-  MP3player.begin(SerialMP3);
-  MP3player.volume(30);
-  MP3player.play(1);
-}
 
-void clock() {
-
-}
-
-void alarm() {
-
-}
-
-void stopwatch() {
+  Serial.println(F("Initializing MP3..."));
+  SerialMP3.listen();
   
-}
-
-void timer() {
-
-}
-
-void menu() {
-
-}
-
-// MAIN LOOP
-void loop() {
-  // TIME SYNC/BLUETOOTH
-  SerialBT.listen();
-  if (SerialBT.available()){
-    msg = SerialBT.readStringUntil('\n');
-    msg.trim();
-    
-    if (msg.startsWith("T")) {
-      String timeString = msg.substring(1); 
-      unsigned long pctime = timeString.toInt();
-      
-      if (pctime > 0) { 
-        setTime(pctime);
-        SerialBT.println(F("Time Synced!"));
-      }
-    }
-    else if (msg == "test") {
-        SerialBT.println(F("its working yay"));
-    }
+  if (MP3player.begin(SerialMP3, false, false)) {
+    Serial.println(F("MP3 Command Sent."));
+    delay(2000);
+    MP3player.volume(30);
+    delay(100);
+    MP3player.play(1);
   }
 
-  // FOR THE ULTRASONIC SENSOR
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
+  SerialBT.listen();
+  Serial.println(F("Setup Complete."));
+}
 
-  timing = pulseIn(echoPin, HIGH);
-  distance = (timing * 0.034) / 2;
-  
-  // CLOCK
-  static int lastSecond = -1;
-  if (second() != lastSecond) {
-    lastSecond = second();
+void loop() {
+  unsigned long currentMillis = millis();
+
+  // BT
+  if (SerialBT.available()) {
+    String msg = SerialBT.readStringUntil('\n');
+    msg.trim();
+    if (msg.startsWith("T")) setTime(msg.substring(1).toInt());
+  }
+
+  // ULTRASONIC SENSOR
+  if (currentMillis - prevMillis >= 150) {
+    prevMillis = currentMillis;
+
+    digitalWrite(trigPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(trigPin, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(trigPin, LOW);
+
+    long duration = pulseIn(echoPin, HIGH, 30000);
+    int distance = (duration * 0.034) / 2;
+
+    if (distance > 0 && distance < 20 && isAlarmPlaying) {
+      Serial.println(F("Snooze Triggered!"));
+      
+      SerialMP3.listen();
+      MP3player.stop();
+      
+      isAlarmPlaying = false;
+      showSnooze = true;
+      snoozeTimer = currentMillis;
+      
+      SerialBT.listen(); 
+      displayTime();
+    }
+  }
+  if (showSnooze && (currentMillis - snoozeTimer >= 3000)) {
+    showSnooze = false;
     displayTime();
   }
 
-  // temp for ultrasonic  
-  delay(100);
+  // CLOCK
+  static int lastSec = -1;
+  if (second() != lastSec) {
+    lastSec = second();
+    displayTime();
+  }
 }
 
 void displayTime() {
   display.clearDisplay();
-  display.setCursor(0, 16);
+  display.setTextColor(WHITE);
+  
+  display.setCursor(0, 15); 
   display.setTextSize(3);
-  
-  if (hour() < 10) display.print("0");
-  display.print(hour());
+  if (hour() < 10) display.print("0"); display.print(hour());
   display.print(":");
+  if (minute() < 10) display.print("0"); display.print(minute());
   
-  if (minute() < 10) display.print("0");
-  display.print(minute());
   display.setTextSize(2);
   display.print(" "); 
+  if (second() < 10) display.print("0"); display.print(second());
 
-  if (second() < 10) display.print("0");
-  display.print(second());
-
-  display.display(); 
+  if (showSnooze) {
+    display.setTextSize(1);
+    display.setCursor(25, 52);
+    display.print(F("ALARM STOPPED"));
+  }
+  display.display();
 }

@@ -25,7 +25,7 @@ DFRobotDFPlayerMini MP3player;
 
 // LOGIC
 unsigned long prevMillis = 0;
-bool isAlarmPlaying = true;
+bool isAlarmPlaying = false;
 bool showSnooze = false;
 unsigned long snoozeTimer = 0;
 
@@ -44,28 +44,35 @@ void setup() {
 
   setTime(0, 0, 0, 1, 1, 2026);
 
-  Serial.println(F("Initializing MP3..."));
   SerialMP3.listen();
-  
   if (MP3player.begin(SerialMP3, false, false)) {
-    Serial.println(F("MP3 Command Sent."));
-    delay(2000);
     MP3player.volume(30);
-    delay(100);
-    MP3player.play(1);
   }
-
   SerialBT.listen();
-  Serial.println(F("Setup Complete."));
+}
+
+void alarmPlay() {
+  Serial.println(F("Starting Alarm..."));
+  
+  SerialMP3.listen();
+  delay(50);
+  MP3player.play(1);
+  delay(50);
+  
+  SerialBT.listen();
+  isAlarmPlaying = true;
 }
 
 void loop() {
   unsigned long currentMillis = millis();
 
-  // BT
+  // BT COMMANDS
   if (SerialBT.available()) {
     String msg = SerialBT.readStringUntil('\n');
     msg.trim();
+    if (msg.equals("alarm")) {
+      alarmPlay();
+    }
     if (msg.startsWith("T")) setTime(msg.substring(1).toInt());
   }
 
@@ -83,25 +90,28 @@ void loop() {
     int distance = (duration * 0.034) / 2;
 
     if (distance > 0 && distance < 20 && isAlarmPlaying) {
-      Serial.println(F("Snooze Triggered!"));
+      Serial.println(F("Snooze Triggered"));
       
       SerialMP3.listen();
+      delay(50);
       MP3player.stop();
       
-      isAlarmPlaying = false;
+      isAlarmPlaying = false; 
       showSnooze = true;
       snoozeTimer = currentMillis;
       
-      SerialBT.listen(); 
+      SerialBT.listen();
       displayTime();
     }
   }
+
+  // SNOOZE DISPLAY TIMER
   if (showSnooze && (currentMillis - snoozeTimer >= 3000)) {
     showSnooze = false;
     displayTime();
   }
 
-  // CLOCK
+  // CLOCK REFRESH
   static int lastSec = -1;
   if (second() != lastSec) {
     lastSec = second();
@@ -123,10 +133,16 @@ void displayTime() {
   display.print(" "); 
   if (second() < 10) display.print("0"); display.print(second());
 
+  if (isAlarmPlaying) {
+    display.setTextSize(1);
+    display.setCursor(25, 52);
+    display.print(F("ALARM PLAYING"));
+  }
   if (showSnooze) {
     display.setTextSize(1);
     display.setCursor(25, 52);
     display.print(F("ALARM STOPPED"));
+
   }
   display.display();
 }

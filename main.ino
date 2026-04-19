@@ -28,11 +28,13 @@ SoftwareSerial SerialMP3(MP3_RX_PIN, MP3_TX_PIN);
 // LOGIC
 unsigned long prevMillis = 0;
 unsigned long menuNum = 1; 
-bool menuActive = true;
+unsigned long snoozeTimer = 0;
+unsigned long alarmVolume = 20;
+
+bool menuActive = false;
 bool isAlarmPlaying = false;
 bool showSnooze = false;
-bool secondsEnabled = false;
-unsigned long snoozeTimer = 0;
+bool secondsEnabled = true;
 
 // SETUP
 void setup() {
@@ -40,6 +42,7 @@ void setup() {
   
   if (!rtc.begin()) {
     Serial.println(F("RTC Error"));
+    setTime(0, 0, 0, 1, 1, 2026);
   } else {
     DateTime now = rtc.now();
     setTime(now.unixtime());
@@ -64,10 +67,11 @@ void setup() {
   display.print(F("Loading Clock :3"));
   display.display();
   delay(1000);
+  adjustTime(1);
 
   SerialMP3.listen();
   if (MP3player.begin(SerialMP3, false, false)) {
-    MP3player.volume(28);
+    MP3player.volume(alarmVolume);
   }
   SerialBT.listen();
 }
@@ -83,6 +87,12 @@ void loop() {
     
     if (msg.equals("alarm")) {
       alarmPlay();
+    }
+    if (msg.startsWith("V")) {
+      long v = msg.substring(1).toInt();
+      alarmVolume = v;
+      Serial.println(F("Volume set to: "));
+      Serial.println(alarmVolume);
     }
     
     if (msg.startsWith("T")) {
@@ -126,6 +136,7 @@ void loop() {
 
 void alarmPlay() {
   SerialMP3.listen();
+  MP3player.volume(alarmVolume);
   delay(50);
   MP3player.play(1);
   delay(50);
@@ -149,17 +160,17 @@ void displayTime() {
   display.setTextColor(WHITE);
 
   // MENU
-  display.setTextSize(1);
-  display.setCursor(0, 0);
-  display.print("CLOCK");
-
-  display.setCursor(40, 0);
-  display.print("TIMER");
-
-  display.setCursor(80, 0);
-  display.print("STPWATCH");
-
   if (menuActive) {
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.print("CLOCK");
+
+    display.setCursor(40, 0);
+    display.print("TIMER");
+
+    display.setCursor(80, 0);
+    display.print("STPWATCH");
+
     if (menuNum == 1) {
       display.drawLine(0, 9, 29, 9, WHITE);
     }
@@ -194,7 +205,7 @@ void displayTime() {
   // NOTIFICATIONS
   if (isAlarmPlaying) {
     display.setCursor(25, 55); display.setTextSize(1);
-    display.print(F("ALARM PLAYING"));
+    display.print(F("ALARM ACTIVE"));
   }
   if (showSnooze) {
     display.setCursor(25, 55); display.setTextSize(1);

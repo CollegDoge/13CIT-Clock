@@ -32,9 +32,10 @@ unsigned long snoozeTimer = 0;
 unsigned long alarmVolume = 20;
 
 bool menuActive = false;
+bool secondsEnabled = false;
+
 bool isAlarmPlaying = false;
 bool showSnooze = false;
-bool secondsEnabled = true;
 
 // SETUP
 void setup() {
@@ -87,12 +88,16 @@ void loop() {
     
     if (msg.equals("alarm")) {
       alarmPlay();
+    } else if (msg.equals("menu")) {
+      menuActive = !menuActive;
+    } else if (msg.equals("seconds")) {
+      secondsEnabled = !secondsEnabled;
     }
+
     if (msg.startsWith("V")) {
       long v = msg.substring(1).toInt();
       alarmVolume = v;
-      Serial.println(F("Volume set to: "));
-      Serial.println(alarmVolume);
+      Serial.println(F("Volume Changed"));
     }
     
     if (msg.startsWith("T")) {
@@ -163,13 +168,13 @@ void displayTime() {
   if (menuActive) {
     display.setTextSize(1);
     display.setCursor(0, 0);
-    display.print("CLOCK");
+    display.print(F("CLOCK"));
 
     display.setCursor(40, 0);
-    display.print("TIMER");
+    display.print(F("TIMER"));
 
     display.setCursor(80, 0);
-    display.print("STPWATCH");
+    display.print(F("STPWATCH"));
 
     if (menuNum == 1) {
       display.drawLine(0, 9, 29, 9, WHITE);
@@ -187,19 +192,19 @@ void displayTime() {
   if (secondsEnabled) {
       display.setCursor(0, 20); 
 
-      if (hour() < 10) display.print("0"); display.print(hour());
-      display.print(":");
-      if (minute() < 10) display.print("0"); display.print(minute());
+      if (hour() < 10) display.print(F("0")); display.print(hour());
+      display.print(F(":"));
+      if (minute() < 10) display.print(F("0")); display.print(minute());
       
       display.setTextSize(2);
-      display.print(" "); 
-      if (second() < 10) display.print("0"); display.print(second());
+      display.print(F(" ")); 
+      if (second() < 10) display.print(F("0")); display.print(second());
   } else {
     display.setCursor(20, 20); 
     
-    if (hour() < 10) display.print("0"); display.print(hour());
-    display.print(":");
-    if (minute() < 10) display.print("0"); display.print(minute());
+    if (hour() < 10) display.print(F("0")); display.print(hour());
+    display.print(F(":"));
+    if (minute() < 10) display.print(F("0")); display.print(minute());
   }
 
   // NOTIFICATIONS

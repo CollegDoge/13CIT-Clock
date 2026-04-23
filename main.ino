@@ -27,14 +27,19 @@ SoftwareSerial SerialMP3(MP3_RX_PIN, MP3_TX_PIN);
 
 // LOGIC
 unsigned long prevMillis = 0;
-unsigned long menuNum = 1; 
-unsigned long snoozeTimer = 0;
-unsigned long alarmVolume = 20;
-
-bool menuActive = false;
-bool secondsEnabled = false;
-
 bool isAlarmPlaying = false;
+char buffer[12];
+
+int alarmHour = -1;
+int alarmMinute = -1;
+bool alarmEnabled = false;
+uint8_t alarmVolume = 20;
+uint8_t alarmTone = 1;
+
+bool secondsEnabled = false;
+bool dateActive = false;
+
+unsigned long snoozeTimer = 0;
 bool showSnooze = false;
 
 // SETUP
@@ -83,28 +88,50 @@ void loop() {
 
   // BT COMMANDS
   if (SerialBT.available()) {
-    String msg = SerialBT.readStringUntil('\n');
-    msg.trim();
-    
-    if (msg.equals("alarm")) {
+    int len = SerialBT.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
+    buffer[len] = '\0';
+
+    // STRING MATCH CMDS
+    if (strcmp(buffer, "alarm") == 0) {
       alarmPlay();
-    } else if (msg.equals("menu")) {
-      menuActive = !menuActive;
-    } else if (msg.equals("seconds")) {
+    }
+    else if (strcmp(buffer, "date") == 0) {
+      dateActive = !dateActive;
+    }
+    else if (strcmp(buffer, "seconds") == 0) {
       secondsEnabled = !secondsEnabled;
     }
+    else if (strcmp(buffer, "tone") == 0) {
+      alarmTone = (alarmTone == 1) ? 2 : 1;
+    }
 
-    if (msg.startsWith("V")) {
-      long v = msg.substring(1).toInt();
-      alarmVolume = v;
+    // STRING START CMDS
+    else if (buffer[0] == 'V') {
+      alarmVolume = atoi(buffer + 1);
       Serial.println(F("Volume Changed"));
     }
-    
-    if (msg.startsWith("T")) {
-      long t = msg.substring(1).toInt();
+    else if (buffer[0] == 'T') {
+      long t = atol(buffer + 1);
       setTime(t);
       rtc.adjust(DateTime(t));
       Serial.println(F("Time Synced via Phone"));
+    }
+    else if (buffer[0] == 'A') {
+      int val = atoi(buffer + 1);
+
+      if (val == 0) {
+        alarmEnabled = false;
+        Serial.println(F("Alarm Disabled"));
+      } else {
+        alarmHour = val / 100;
+        alarmMinute = val % 100;
+        alarmEnabled = true;
+
+        Serial.print(F("Alarm Set: "));
+        Serial.print(alarmHour);
+        Serial.print(F(":"));
+        Serial.println(alarmMinute);
+      }
     }
   }
 
@@ -143,7 +170,7 @@ void alarmPlay() {
   SerialMP3.listen();
   MP3player.volume(alarmVolume);
   delay(50);
-  MP3player.play(1);
+  MP3player.play(alarmTone);
   delay(50);
   SerialBT.listen();
   isAlarmPlaying = true;
@@ -162,29 +189,32 @@ void triggerSnooze(unsigned long currentMillis) {
 
 void displayTime() {
   display.clearDisplay();
-  display.setTextColor(WHITE);
 
-  // MENU
-  if (menuActive) {
+  // DATE
+  if (dateActive) {
+    display.setCursor(36, 0);
     display.setTextSize(1);
-    display.setCursor(0, 0);
-    display.print(F("CLOCK"));
+    display.print(day());
+    display.print(F("/"));
+    display.print(month());
+    display.print(F("/"));
+    display.print(year());
+  }
 
-    display.setCursor(40, 0);
-    display.print(F("TIMER"));
+  // ALARM
+  static int lastAlarmMinute = -1;
 
-    display.setCursor(80, 0);
-    display.print(F("STPWATCH"));
+  if (alarmEnabled && !isAlarmPlaying) {
+    if (hour() == alarmHour && minute() == alarmMinute) {
+      if (lastAlarmMinute != minute()) {
+        alarmPlay();
+        lastAlarmMinute = minute();
+      }
+    }
+  }
 
-    if (menuNum == 1) {
-      display.drawLine(0, 9, 29, 9, WHITE);
-    }
-    if (menuNum == 2) {
-      display.drawLine(40, 9, 68, 9, WHITE);
-    }
-    if (menuNum == 3) {
-      display.drawLine(80, 9, 126, 9, WHITE);
-    }
+  if (minute() != lastAlarmMinute) {
+    lastAlarmMinute = -1;
   }
 
   // CLOCK

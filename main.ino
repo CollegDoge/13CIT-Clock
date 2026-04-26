@@ -9,44 +9,42 @@
 // PINS
 const int trigPin = 11;
 const int echoPin = 12;
-
 const int MP3_RX_PIN = 3;
 const int MP3_TX_PIN = 2;
-
 const int BT_RX_PIN = 6;
 const int BT_TX_PIN = 5;
 
 // DEFINITIONS
-Adafruit_SSD1306 display(128, 64, &Wire, -1);
-DFRobotDFPlayerMini MP3player;
-RTC_DS3231 rtc;
+Adafruit_SSD1306 display(128, 64, &Wire, -1); // define display resolution/name
+DFRobotDFPlayerMini MP3player; // define MP3 player name
+RTC_DS3231 rtc; // define RTC module name
 
 // SERIAL
-SoftwareSerial SerialBT(BT_RX_PIN, BT_TX_PIN);
-SoftwareSerial SerialMP3(MP3_RX_PIN, MP3_TX_PIN);
+SoftwareSerial SerialBT(BT_RX_PIN, BT_TX_PIN); // define BT name/pins used
+SoftwareSerial SerialMP3(MP3_RX_PIN, MP3_TX_PIN); // define MP3 name/pins used
 
 // LOGIC
-unsigned long prevMillis = 0;
-bool isAlarmPlaying = false;
-char buffer[12];
+unsigned long prevMillis = 0; // so i can avoid using delay.
+bool isAlarmPlaying = false; // if the alarm is playing
+char buffer[12]; // character buffer for bluetooth (12 is enough for what im doing)
 
-int alarmHour = -1;
-int alarmMinute = -1;
-bool alarmEnabled = false;
-uint8_t alarmVolume = 20;
-uint8_t alarmTone = 1;
+int alarmHour = -1; // set alarm hour value. -1 is not set
+int alarmMinute = -1; // set alarm minute value. -1 is not set
+bool alarmEnabled = false; // if the alarm is enabled.
+uint8_t alarmVolume = 20; // the volume of the alarm
+uint8_t alarmTone = 1; // what MP3 it uses.
 
-bool secondsEnabled = false;
-bool dateActive = false;
-
-unsigned long snoozeTimer = 0;
-bool showSnooze = false;
+bool secondsEnabled = false; // if seconds should be shown on the display
+bool dateActive = false; // if the date should be shown on the display
+ 
+unsigned long snoozeTimer = 0; // snooze message delay
+bool showSnooze = false; // if the snooze message is shown
 
 // SETUP
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(9600); // begin serial monitor
   
-  if (!rtc.begin()) {
+  if (!rtc.begin()) { // sync time with phone, otherwise set a backup date/time.
     Serial.println(F("RTC Error"));
     setTime(0, 0, 0, 1, 1, 2026);
   } else {
@@ -55,17 +53,21 @@ void setup() {
     Serial.println(F("RTC OK"));
   }
 
+  // begin BT/MP3 serial
   SerialBT.begin(9600);
   SerialMP3.begin(9600);
   
+  // for the ultrasonic sensor
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
+  // if display filed to start. mainly for testing, dont need.
   if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
     Serial.println(F("SSD1306 allocation failed"));
     for(;;);
   }
 
+  // set up display
   display.clearDisplay();
   display.setTextSize(1);
   display.setTextColor(WHITE);
@@ -73,22 +75,24 @@ void setup() {
   display.print(F("Loading Clock :3"));
   display.display();
   delay(1000);
-  adjustTime(1);
+  adjustTime(1); // add 1 second as we have just used delay. kinda chopped.
 
+  // start MP3 first, set default volume.
   SerialMP3.listen();
   if (MP3player.begin(SerialMP3, false, false)) {
     MP3player.volume(alarmVolume);
   }
+  // start BT next.
   SerialBT.listen();
 }
 
 // MAIN LOOP
 void loop() {
-  unsigned long currentMillis = millis();
+  unsigned long currentMillis = millis(); // so we can aboid delay where possible.
 
   // BT COMMANDS
   if (SerialBT.available()) {
-    int len = SerialBT.readBytesUntil('\n', buffer, sizeof(buffer) - 1);
+    int len = SerialBT.readBytesUntil('\n', buffer, sizeof(buffer) - 1); // max length of 12
     buffer[len] = '\0';
 
     // STRING MATCH CMDS
@@ -106,17 +110,17 @@ void loop() {
     }
 
     // STRING START CMDS
-    else if (buffer[0] == 'V') {
+    else if (buffer[0] == 'V') { // change volume based of value 1-30
       alarmVolume = atoi(buffer + 1);
       Serial.println(F("Volume Changed"));
     }
-    else if (buffer[0] == 'T') {
+    else if (buffer[0] == 'T') { // sets the time using unix timestamp.
       long t = atol(buffer + 1);
       setTime(t);
       rtc.adjust(DateTime(t));
       Serial.println(F("Time Synced via Phone"));
     }
-    else if (buffer[0] == 'A') {
+    else if (buffer[0] == 'A') { // sets alarm (a0 = unset, axxxx = set)
       int val = atoi(buffer + 1);
 
       if (val == 0) {
@@ -127,6 +131,7 @@ void loop() {
         alarmMinute = val % 100;
         alarmEnabled = true;
 
+        // for testing
         Serial.print(F("Alarm Set: "));
         Serial.print(alarmHour);
         Serial.print(F(":"));
@@ -136,10 +141,10 @@ void loop() {
   }
 
   // ULTRASONIC SENSOR (SNOOZE)
-  if (currentMillis - prevMillis >= 150) {
+  if (currentMillis - prevMillis >= 150) { // if distance is under 150, activate
     prevMillis = currentMillis;
     digitalWrite(trigPin, LOW);
-    delayMicroseconds(2);
+    delayMicroseconds(2); // lowest delay i could get away with.
     digitalWrite(trigPin, HIGH);
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
@@ -147,43 +152,44 @@ void loop() {
     long duration = pulseIn(echoPin, HIGH, 30000);
     int distance = (duration * 0.034) / 2;
 
+    // actually snooze if an alarm is playing.
     if (distance > 0 && distance < 20 && isAlarmPlaying) {
       triggerSnooze(currentMillis);
     }
   }
 
   // SNOOZE DISPLAY TIMER
-  if (showSnooze && (currentMillis - snoozeTimer >= 3000)) {
+  if (showSnooze && (currentMillis - snoozeTimer >= 3000)) { // show snooze msg for 3 seconds.
     showSnooze = false;
     displayTime();
   }
 
   // CLOCK REFRESH
   static int lastSec = -1;
-  if (second() != lastSec) {
+  if (second() != lastSec) { // refresh every second.
     lastSec = second();
     displayTime();
   }
 }
 
 void alarmPlay() {
-  SerialMP3.listen();
-  MP3player.volume(alarmVolume);
+  SerialMP3.listen(); // activate mp3 listener
+  MP3player.volume(alarmVolume); // set volume if changed
   delay(50);
-  MP3player.play(alarmTone);
+  MP3player.play(alarmTone); // play alarm
   delay(50);
-  SerialBT.listen();
+  SerialBT.listen(); // reactivate bt listener
   isAlarmPlaying = true;
 }
 
 void triggerSnooze(unsigned long currentMillis) {
-  SerialMP3.listen();
+  SerialMP3.listen(); // activate mp3 listener
   delay(50);
-  MP3player.stop();
+  MP3player.stop(); // stop alarm
   isAlarmPlaying = false; 
   showSnooze = true;
   snoozeTimer = currentMillis;
-  SerialBT.listen();
+  SerialBT.listen(); // reactivate bt listener
   displayTime();
 }
 
@@ -191,7 +197,7 @@ void displayTime() {
   display.clearDisplay();
 
   // DATE
-  if (dateActive) {
+  if (dateActive) { // show date if enabled
     display.setCursor(36, 0);
     display.setTextSize(1);
     display.print(day());
@@ -204,7 +210,7 @@ void displayTime() {
   // ALARM
   static int lastAlarmMinute = -1;
 
-  if (alarmEnabled && !isAlarmPlaying) {
+  if (alarmEnabled && !isAlarmPlaying) { // if the hour/minute match, activate the alarm
     if (hour() == alarmHour && minute() == alarmMinute) {
       if (lastAlarmMinute != minute()) {
         alarmPlay();
@@ -213,23 +219,23 @@ void displayTime() {
     }
   }
 
-  if (minute() != lastAlarmMinute) {
+  if (minute() != lastAlarmMinute) { // dont reactivate once snoozed
     lastAlarmMinute = -1;
   }
 
   // CLOCK
-  display.setTextSize(3);
-  if (secondsEnabled) {
+  display.setTextSize(3); // big text
+  if (secondsEnabled) { // if seconds enabled, add them on the end
       display.setCursor(0, 20); 
 
-      if (hour() < 10) display.print(F("0")); display.print(hour());
+      if (hour() < 10) display.print(F("0")); display.print(hour()); // add 0 if hour is under 10.
       display.print(F(":"));
       if (minute() < 10) display.print(F("0")); display.print(minute());
       
       display.setTextSize(2);
       display.print(F(" ")); 
       if (second() < 10) display.print(F("0")); display.print(second());
-  } else {
+  } else { // regular (no seconds) display mode
     display.setCursor(20, 20); 
     
     if (hour() < 10) display.print(F("0")); display.print(hour());
@@ -238,11 +244,11 @@ void displayTime() {
   }
 
   // NOTIFICATIONS
-  if (isAlarmPlaying) {
+  if (isAlarmPlaying) { // display alarm active message at bottom of display
     display.setCursor(25, 55); display.setTextSize(1);
     display.print(F("ALARM ACTIVE"));
   }
-  if (showSnooze) {
+  if (showSnooze) { // display alarm stop message at bottom of display
     display.setCursor(25, 55); display.setTextSize(1);
     display.print(F("ALARM STOPPED"));
   }

@@ -175,16 +175,13 @@ void loop() {
 void alarmPlay() {
   SerialMP3.listen(); // activate mp3 listener
   MP3player.volume(alarmVolume); // set volume if changed
-  delay(50);
   MP3player.play(alarmTone); // play alarm
-  delay(50);
   SerialBT.listen(); // reactivate bt listener
   isAlarmPlaying = true;
 }
 
-void triggerSnooze(unsigned long currentMillis) {
+void triggerSnooze(unsigned long currentMillis) { // INTERRUPT
   SerialMP3.listen(); // activate mp3 listener
-  delay(50);
   MP3player.stop(); // stop alarm
   isAlarmPlaying = false; 
   showSnooze = true;
